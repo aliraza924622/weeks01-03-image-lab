@@ -1,0 +1,101 @@
+# weeks01-03_image_lab.py
+# Weeks 01-03 : Image Lab - Inspect, Enhance, Montage
+# Run: python weeks01-03_image_lab.py
+
+import os
+import sys
+from pathlib import Path
+from PIL import Image, ImageEnhance, ImageOps, ImageFilter, ImageDraw, ImageFont
+
+BASE = Path(__file__).resolve().parent
+IMG_DIR = BASE / "images"
+OUT_DIR = BASE / "output"
+OUT_DIR.mkdir(exist_ok=True)
+
+def list_images():
+    exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+    if not IMG_DIR.exists():
+        print(f"images folder nahi mila: {IMG_DIR}")
+        return []
+    files = [p for p in sorted(IMG_DIR.iterdir()) if p.suffix.lower() in exts]
+    return files
+
+def inspect_image(path):
+    with Image.open(path) as im:
+        print(f"\n--- {path.name} ---")
+        print(f"Format: {im.format} | Mode: {im.mode} | Size: {im.size[0]}x{im.size[1]}")
+        print(f"File size: {path.stat().st_size/1024:.1f} KB")
+        return im.size, im.mode
+
+def enhance_image(src, dst):
+    with Image.open(src) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        # Auto contrast + color + sharpness
+        im2 = ImageOps.autocontrast(im, cutoff=1)
+        im2 = ImageEnhance.Color(im2).enhance(1.15)
+        im2 = ImageEnhance.Sharpness(im2).enhance(1.3)
+        im2 = ImageEnhance.Brightness(im2).enhance(1.05)
+        im2.save(dst, quality=92)
+        print(f"Enhanced -> {dst.name}")
+        return dst
+
+def make_grayscale(src, dst):
+    with Image.open(src) as im:
+        im = ImageOps.exif_transpose(im).convert("L").convert("RGB")
+        im.save(dst, quality=92)
+        print(f"Grayscale -> {dst.name}")
+        return dst
+
+def make_thumbnail(src, dst, size=(400, 400)):
+    with Image.open(src) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im.thumbnail(size)
+        im.save(dst, quality=90)
+        print(f"Thumbnail -> {dst.name} {im.size}")
+        return dst
+
+def make_montage(files, dst, thumb_size=(400, 300), cols=3):
+    thumbs = []
+    for f in files:
+        with Image.open(f) as im:
+            im = ImageOps.exif_transpose(im).convert("RGB")
+            im = ImageOps.fit(im, thumb_size, Image.LANCZOS)
+            # label
+            d = ImageDraw.Draw(im)
+            d.rectangle([0, thumb_size[1]-28, thumb_size[0], thumb_size[1]], fill=(0,0,0))
+            d.text((8, thumb_size[1]-24), f.name[:30], fill=(255,255,255))
+            thumbs.append(im.copy())
+    if not thumbs:
+        print("Montage ke liye images nahi hain")
+        return None
+    rows = (len(thumbs) + cols - 1) // cols
+    W = cols * thumb_size[0]
+    H = rows * thumb_size[1]
+    montage = Image.new("RGB", (W, H), (255,255,255))
+    for i, t in enumerate(thumbs):
+        x = (i % cols) * thumb_size[0]
+        y = (i // cols) * thumb_size[1]
+        montage.paste(t, (x, y))
+    montage.save(dst, quality=92)
+    print(f"Montage -> {dst.name} {montage.size}")
+    return dst
+
+def main():
+    print("=== Weeks 01-03 Image Lab ===")
+    files = list_images()
+    print(f"Found {len(files)} images in images/")
+    if not files:
+        print("Pehle images/ folder me 3-4 photos daalo.")
+        return
+    for f in files:
+        inspect_image(f)
+    for f in files:
+        enhance_image(f, OUT_DIR / f"enhanced_{f.stem}.jpg")
+        make_grayscale(f, OUT_DIR / f"gray_{f.stem}.jpg")
+        make_thumbnail(f, OUT_DIR / f"thumb_{f.stem}.jpg")
+    make_montage(files, OUT_DIR / "montage.jpg")
+    print("\nHo gaya! output/ folder check karo.")
+    print(f"Output: {OUT_DIR}")
+
+if __name__ == "__main__":
+    main()
